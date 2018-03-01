@@ -1,0 +1,146 @@
+---
+title: "Crime in India Data Analysis"
+output:
+  html_document: default
+  word_document: default
+---
+
+###Introduction  
+
+In this R Notebook, I'm going to analyze the [Crimes in India](https://data.world/rajanand/crime-in-india) dataset obtained from [data.world](https://data.world). You can obtain the data for yourself or you can have hands-on with the data on the wesite itself using your favourite language (you will need account for that).
+
+Okay, let's get into analysis. The data I'm analyzing here is from 2001-2013. The data is available in multiple csv files based on the topic (like children, women, minority etc.) and year (2001-2012, 2013 and 2014). For this analysis, I am going to use District Wise Crimes Committed as per IPC. I have to combine the data as it is available in 2 files for 2001-2012 and 2013. Let's go.
+
+####Loading Required Libraries
+```{r}
+library(ggplot2)
+library(data.table)
+library(highcharter)
+library(magrittr)
+library(dplyr)
+
+```
+
+####Reading the data
+```{r}
+data2012 <- read.csv("01_District_wise_crimes_committed_IPC_2001_2012.csv", header = T, stringsAsFactors = F, na.strings = "")
+data2013 <- read.csv("01_District_wise_crimes_committed_IPC_2013.csv", header = T, stringsAsFactors = F, na.strings = "")
+```
+
+Let's look at the data
+```{r}
+dim(data2012)
+dim(data2013)
+```
+
+```{r}
+str(data2012)
+str(data2013)
+```
+
+Let's combine the data.
+```{r}
+data <- rbind(data2012,data2013)
+```
+
+```{r}
+dim(data)
+```
+
+```{r}
+table(is.na(data))
+```
+
+We can see there is no missing value's in the data. That's good. Let's analyze.
+
+####Analysis
+
+```{r}
+head(data, 10)
+```
+
+```{r}
+data <- dplyr::mutate_all(data,.funs=toupper)
+data[data$STATE.UT=="A&N ISLANDS","STATE.UT"] <- "A & N ISLANDS"
+data$STATE.UT <- as.factor(data$STATE.UT)
+data$DISTRICT <- as.factor(data$DISTRICT)
+data[3:33] <- lapply(data[3:33],as.integer)
+str(data)
+```
+
+```{r}
+year <-2001:2013
+states <- levels(data$STATE.UT)
+df <- data.frame(STATE.UT="dummy",YEAR=2000, TOTAL.IPC.CRIMES=0)
+```
+
+```{r}
+for(i in states) {
+  for(j in year) {
+    temp <- data.frame(STATE.UT=i, YEAR=j, TOTAL.IPC.CRIMES=sum(data[data$STATE.UT==i & data$YEAR==j,]$TOTAL.IPC.CRIMES))
+    df <- rbind(df, temp)
+  }
+}
+df <- df[-1,]
+```
+
+```{r}
+str(df)
+```
+
+```{r}
+#for(i in 1:36) {
+#  ts <- ts(df[df$STATE.UT==states[i],]$TOTAL.IPC.CRIMES,start=2001, frequency = 12)
+#  hc <- hchart(ts, name = "Crimes") %>% 
+#  hc_add_theme(hc_theme_darkunica()) %>%
+#  hc_credits(enabled = TRUE, text = "Sources: DATA.WORLD", style = list(fontSize = "12px")) %>%
+#  hc_title(text = states[i]) %>%
+#  hc_legend(enabled = TRUE) 
+#  print(hc)%>% hw_grid(rowheight=250,ncol=2)
+#}
+
+lapply(states,function(x){
+  ts(df[df$STATE.UT==x,]$TOTAL.IPC.CRIMES,start=2001, frequency = 12) %>% 
+    hchart(showInLegend = FALSE) %>% 
+    hc_add_theme(hc_theme_smpl()) %>% 
+    hc_title(text = x) %>% 
+    hc_yAxis(title = list(text = ""))
+  }) %>% 
+  hw_grid(rowheight = 225, ncol = 3)
+```
+```{r}
+hc_opts <- list()
+hc_opts$chart <- list(type = "bar")
+hc_opts$title <- list(title = "Stacked bar")
+hc_opts$xAxis <- list(categories = states)
+hc_opts$yAxis <- list(min = 0, title = list(text = 'Crime Increase from 2001 to 2013'))
+hc_opts$legend <- list(reversed = TRUE)
+hc_opts$series <- list(list(name = "2001", data = df[df$YEAR==2001,3]),
+                       list(name = "2013", data = df[df$YEAR==2013,3]))
+
+highchart(hc_opts, theme = hc_theme_sandsignika())
+```
+
+```{r}
+df1 <- filter(df, TOTAL.IPC.CRIMES>30000)
+df2 <- filter(df, TOTAL.IPC.CRIMES<=30000)
+```
+
+```{r}
+hc_opts <- list()
+hc_opts$chart <- list(type = "bar")
+hc_opts$title <- list(title = "Stacked bar")
+hc_opts$yAxis <- list(min = 0, title = list(text = 'Crime Increase from 2001 to 2013'))
+hc_opts$legend <- list(reversed = TRUE)
+
+hc_opts$xAxis <- list(categories = unique(df1$STATE.UT))
+hc_opts$series <- list(list(name = "2001", data = df1[df1$YEAR==2001,3]),
+                       list(name = "2013", data = df1[df1$YEAR==2013,3]))
+highchart(hc_opts, theme = hc_theme_sandsignika())
+
+hc_opts$xAxis <- list(categories = unique(df2$STATE.UT))
+hc_opts$series <- list(list(name = "2001", data = df2[df2$YEAR==2001,3]),
+                       list(name = "2013", data = df2[df2$YEAR==2013,3]))
+highchart(hc_opts, theme = hc_theme_sandsignika())
+```
+
